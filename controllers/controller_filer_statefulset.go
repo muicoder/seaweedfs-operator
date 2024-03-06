@@ -13,8 +13,11 @@ import (
 )
 
 func buildFilerStartupScript(m *seaweedv1.Seaweed) string {
-	commands := []string{"weed", "-logtostderr=true", "filer"}
-	commands = append(commands, fmt.Sprintf("-port=%d", seaweedv1.FilerHTTPPort))
+	commands := []string{"exec weed", "-logtostderr=true", "filer", fmt.Sprintf("-port=%d", seaweedv1.FilerHTTPPort)}
+	if m.Spec.HostNetwork != nil && *m.Spec.HostNetwork == true {
+	} else {
+		commands = append([]string{"until nslookup $(hostname -f) | grep $(hostname -i); do sleep 1; done&&"}, commands...)
+	}
 	commands = append(commands, fmt.Sprintf("-ip=$(POD_NAME).%s-filer-peer.%s", m.Name, m.Namespace))
 	commands = append(commands, fmt.Sprintf("-master=%s", getMasterPeersString(m)))
 	if m.Spec.Filer.S3 {
@@ -24,7 +27,7 @@ func buildFilerStartupScript(m *seaweedv1.Seaweed) string {
 		commands = append(commands, fmt.Sprintf("-metricsPort=%d", *m.Spec.Filer.MetricsPort))
 	}
 
-	return strings.Join(commands, " ")
+	return strings.Join(append(commands, m.Spec.Filer.Args...), " ")
 }
 
 func (r *SeaweedReconciler) createFilerStatefulSet(m *seaweedv1.Seaweed) *appsv1.StatefulSet {
@@ -115,18 +118,32 @@ func (r *SeaweedReconciler) createFilerStatefulSet(m *seaweedv1.Seaweed) *appsv1
 		})
 	}
 	filerPodSpec.EnableServiceLinks = &enableServiceLinks
+	filerPodSpec.DNSPolicy = m.BaseFilerSpec().DNSPolicy()
 	filerPodSpec.Containers = []corev1.Container{{
 		Name:            "filer",
 		Image:           m.Spec.Image,
 		ImagePullPolicy: m.BaseFilerSpec().ImagePullPolicy(),
 		Env:             append(m.BaseFilerSpec().Env(), kubernetesEnvVars...),
-		VolumeMounts:    volumeMounts,
+
+		VolumeMounts: volumeMounts,
+		Args:         m.Spec.Filer.Args,
 		Command: []string{
 			"/bin/sh",
 			"-ec",
 			buildFilerStartupScript(m),
 		},
 		Ports: ports,
+		StartupProbe: &corev1.Probe{
+			ProbeHandler: corev1.ProbeHandler{
+				HTTPGet: &corev1.HTTPGetAction{
+					Path:   "/",
+					Port:   intstr.FromInt(seaweedv1.FilerHTTPPort),
+					Scheme: corev1.URISchemeHTTP,
+				},
+			},
+			FailureThreshold: 60,
+			TimeoutSeconds:   3,
+		},
 		ReadinessProbe: &corev1.Probe{
 			ProbeHandler: corev1.ProbeHandler{
 				HTTPGet: &corev1.HTTPGetAction{
@@ -139,7 +156,7 @@ func (r *SeaweedReconciler) createFilerStatefulSet(m *seaweedv1.Seaweed) *appsv1
 			TimeoutSeconds:      3,
 			PeriodSeconds:       15,
 			SuccessThreshold:    1,
-			FailureThreshold:    100,
+			FailureThreshold:    5,
 		},
 		LivenessProbe: &corev1.Probe{
 			ProbeHandler: corev1.ProbeHandler{

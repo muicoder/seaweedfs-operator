@@ -1730,6 +1730,10 @@ spec:
                     description: Annotations of the component. Merged into the cluster-level
                       annotations if non-empty
                     type: object
+                  args:
+                    items:
+                      type: string
+                    type: array
                   config:
                     description: Config in raw toml string
                     type: string
@@ -1893,8 +1897,7 @@ spec:
                       nodeSelector if non-empty
                     type: object
                   persistence:
-                    description: Persistence mounts a volume for local filer data,
-                      recommended only when replicas is set to 1
+                    description: Persistence mounts a volume for local filer data
                     properties:
                       accessModes:
                         default:
@@ -3045,6 +3048,10 @@ spec:
                     description: Annotations of the component. Merged into the cluster-level
                       annotations if non-empty
                     type: object
+                  args:
+                    items:
+                      type: string
+                    type: array
                   concurrentStart:
                     description: only for testing
                     type: boolean
@@ -4260,6 +4267,10 @@ spec:
                     description: Annotations of the component. Merged into the cluster-level
                       annotations if non-empty
                     type: object
+                  args:
+                    items:
+                      type: string
+                    type: array
                   compactionMBps:
                     format: int32
                     type: integer

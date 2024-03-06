@@ -1,0 +1,95 @@
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: redis-auth.standalone.seaweed-redis
+  namespace: longhorn-system
+stringData:
+  password: "c2Vhd2VlZGZz"
+---
+apiVersion: v1
+data:
+  external-common.conf: |-
+    loglevel notice
+    maxclients 10000
+kind: ConfigMap
+metadata:
+  name: redis-conf.standalone.seaweed-redis
+  namespace: longhorn-system
+---
+apiVersion: redis.sensoro.sre/v1beta2
+kind: Redis
+metadata:
+  name: seaweed-redis
+  namespace: longhorn-system
+spec:
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: role
+                  operator: In
+                  values:
+                    - standalone
+            topologyKey: kubernetes.io/hostname
+          weight: 100
+  kubernetesConfig:
+    image: redis:6.2
+    imagePullPolicy: IfNotPresent
+    redisSecret:
+      key: password
+      name: redis-auth.standalone.seaweed-redis
+    resources:
+      limits:
+        cpu: "8"
+        memory: 16Gi
+      requests:
+        cpu: 50m
+        memory: 100Mi
+    service:
+      serviceType: ClusterIP
+  livenessProbe:
+    failureThreshold: 10
+    initialDelaySeconds: 3
+  nodeSelector:
+    redis: ""
+  podSecurityContext:
+    runAsNonRoot: false
+  readinessProbe:
+    initialDelaySeconds: 3
+  redisConfig:
+    additionalRedisConfig: redis-conf.standalone.seaweed-redis
+  redisExporter:
+    enabled: true
+    image: oliver006/redis_exporter:alpine
+    imagePullPolicy: IfNotPresent
+    resources:
+      limits:
+        cpu: "2"
+        memory: 4Gi
+      requests:
+        cpu: 50m
+        memory: 100Mi
+  sidecars: []
+  storage:
+    volumeClaimTemplate:
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 50Gi
+        storageClassName: longhorn
+    volumeMount:
+      mountPath:
+        - mountPath: /usr/local/bin/docker-entrypoint.sh
+          name: entrypoint
+          subPath: entrypoint.sh
+      volume:
+        - configMap:
+            defaultMode: 493
+            name: entrypoint.redis.sensoro.sre
+          name: entrypoint
+  terminationGracePeriodSeconds: 300
