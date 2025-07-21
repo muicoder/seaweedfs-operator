@@ -1,0 +1,83 @@
+apiVersion: seaweed.seaweedfs.com/v1
+kind: Seaweed
+metadata:
+  name: seaweed
+  namespace: kube-system
+spec:
+  enablePVReclaim: false
+  filer:
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                  - key: app.kubernetes.io/component
+                    operator: In
+                    values:
+                      - filer
+              topologyKey: kubernetes.io/hostname
+            weight: 100
+    args:
+      - -encryptVolumeData
+    config: |
+      [redis2]
+      enabled = true
+      address = "seaweed-redis:6379"
+      password = "c2Vhd2VlZGZz"
+      database = 9
+    metricsPort: 28888
+    replicas: 2
+    s3: true
+  hostNetwork: false
+  hostSuffix: seaweedfs.com
+  image: chrislusf/seaweedfs:4.01
+  master:
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                  - key: app.kubernetes.io/component
+                    operator: In
+                    values:
+                      - master
+              topologyKey: kubernetes.io/hostname
+            weight: 100
+    args:
+      - -defaultReplication=001
+      - -raftBootstrap
+      - -raftHashicorp
+      - -volumePreallocate
+      - -volumeSizeLimitMB=1024
+    config: |
+      [master.replication]
+      treat_replication_as_minimums = false
+    metricsPort: 29333
+    replicas: 1
+  nodeSelector:
+    kubernetes.io/os: linux
+    node.longhorn.io/create-default-disk: config
+  volume:
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                  - key: app.kubernetes.io/component
+                    operator: In
+                    values:
+                      - volume
+              topologyKey: kubernetes.io/hostname
+            weight: 100
+    args:
+      - -compactionMBps=100
+      - -index=leveldb
+    metricsPort: 28080
+    replicas: 2
+    requests:
+      storage: 100Gi
+    storageClassName: longhorn
+  volumeServerDiskCount: 2

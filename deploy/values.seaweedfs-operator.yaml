@@ -1,0 +1,9 @@
+grafanaDashboard:
+  enabled: false
+image:
+  registry: muicoder
+  tag: latest
+serviceMonitor:
+  enabled: false
+webhook:
+  enabled: false
