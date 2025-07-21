@@ -13,8 +13,11 @@ import (
 )
 
 func buildFilerStartupScript(m *seaweedv1.Seaweed) string {
-	commands := []string{"weed", "-logtostderr=true", "filer"}
-	commands = append(commands, fmt.Sprintf("-port=%d", seaweedv1.FilerHTTPPort))
+	commands := []string{"exec weed", "-logtostderr=true", "filer", fmt.Sprintf("-port=%d", seaweedv1.FilerHTTPPort)}
+	if m.Spec.HostNetwork != nil && *m.Spec.HostNetwork == true {
+	} else {
+		commands = append([]string{"until nslookup $(hostname -f) | grep $(hostname -i); do sleep 1; done&&"}, commands...)
+	}
 	commands = append(commands, fmt.Sprintf("-ip=$(POD_NAME).%s-filer-peer.%s", m.Name, m.Namespace))
 	commands = append(commands, fmt.Sprintf("-master=%s", getMasterPeersString(m)))
 	if s3Config := m.Spec.Filer.S3; s3Config != nil && s3Config.Enabled {
@@ -33,7 +36,7 @@ func buildFilerStartupScript(m *seaweedv1.Seaweed) string {
 		commands = append(commands, fmt.Sprintf("-metricsPort=%d", *m.Spec.Filer.MetricsPort))
 	}
 
-	return strings.Join(commands, " ")
+	return strings.Join(append(commands, m.Spec.Filer.Args...), " ")
 }
 
 func (r *SeaweedReconciler) createFilerStatefulSet(m *seaweedv1.Seaweed) *appsv1.StatefulSet {
@@ -144,6 +147,7 @@ func (r *SeaweedReconciler) createFilerStatefulSet(m *seaweedv1.Seaweed) *appsv1
 		})
 	}
 	filerPodSpec.EnableServiceLinks = &enableServiceLinks
+	filerPodSpec.DNSPolicy = m.BaseFilerSpec().DNSPolicy()
 	filerPodSpec.Containers = []corev1.Container{{
 		Name:            "filer",
 		Image:           m.Spec.Image,
@@ -151,12 +155,24 @@ func (r *SeaweedReconciler) createFilerStatefulSet(m *seaweedv1.Seaweed) *appsv1
 		Env:             append(m.BaseFilerSpec().Env(), kubernetesEnvVars...),
 		Resources:       filterContainerResources(m.Spec.Filer.ResourceRequirements),
 		VolumeMounts:    volumeMounts,
+		Args:            m.Spec.Filer.Args,
 		Command: []string{
 			"/bin/sh",
 			"-ec",
 			buildFilerStartupScript(m),
 		},
 		Ports: ports,
+		StartupProbe: &corev1.Probe{
+			ProbeHandler: corev1.ProbeHandler{
+				HTTPGet: &corev1.HTTPGetAction{
+					Path:   "/",
+					Port:   intstr.FromInt(seaweedv1.FilerHTTPPort),
+					Scheme: corev1.URISchemeHTTP,
+				},
+			},
+			FailureThreshold: 100,
+			TimeoutSeconds:   3,
+		},
 		ReadinessProbe: &corev1.Probe{
 			ProbeHandler: corev1.ProbeHandler{
 				HTTPGet: &corev1.HTTPGetAction{

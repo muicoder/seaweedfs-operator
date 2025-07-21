@@ -910,6 +910,10 @@ spec:
                     additionalProperties:
                       type: string
                     type: object
+                  args:
+                    items:
+                      type: string
+                    type: array
                   claims:
                     items:
                       properties:
@@ -1625,6 +1629,10 @@ spec:
                     additionalProperties:
                       type: string
                     type: object
+                  args:
+                    items:
+                      type: string
+                    type: array
                   claims:
                     items:
                       properties:
@@ -2241,6 +2249,10 @@ spec:
                     additionalProperties:
                       type: string
                     type: object
+                  args:
+                    items:
+                      type: string
+                    type: array
                   claims:
                     items:
                       properties:
@@ -2883,6 +2895,10 @@ spec:
                     additionalProperties:
                       type: string
                     type: object
+                  args:
+                    items:
+                      type: string
+                    type: array
                   claims:
                     items:
                       properties:
@@ -3503,6 +3519,10 @@ spec:
                       additionalProperties:
                         type: string
                       type: object
+                    args:
+                      items:
+                        type: string
+                      type: array
                     claims:
                       items:
                         properties:

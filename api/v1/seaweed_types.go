@@ -30,7 +30,7 @@ const (
 	GRPCPortDelta = 10000
 
 	MasterHTTPPort = 9333
-	VolumeHTTPPort = 8444
+	VolumeHTTPPort = 8080
 	FilerHTTPPort  = 8888
 	FilerS3Port    = 8333 // S3 port (IAM API is also available on this port when S3 is enabled)
 
@@ -237,6 +237,7 @@ type FilerSpec struct {
 
 // ComponentSpec is the base spec of each component, the fields should always accessed by the Basic<Component>Spec() method to respect the cluster-level properties
 type ComponentSpec struct {
+	Args []string `json:"args,omitempty"`
 	// Version of the component. Override the cluster-level version if non-empty
 	Version *string `json:"version,omitempty"`
 

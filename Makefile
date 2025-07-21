@@ -52,14 +52,14 @@ test-e2e:
 
 # Build manager binary
 manager: generate fmt vet
-	go build -ldflags="-s -w" -o bin/manager main.go
+	go build -ldflags="-s -w" -o bin/manager cmd/main.go
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
 run: generate fmt vet manifests
-	go run ./main.go
+	go run ./cmd/main.go
 
 debug: generate fmt vet manifests
-	go build -ldflags="-s -w" -gcflags="all=-N -l" ./main.go
+	go build -ldflags="-s -w" -gcflags="all=-N -l" ./cmd/main.go
 	ENABLE_WEBHOOKS=false dlv --listen=:2345 --headless=true --api-version=2 --accept-multiclient exec main
 
 # Generate manifests e.g. CRD, RBAC etc.

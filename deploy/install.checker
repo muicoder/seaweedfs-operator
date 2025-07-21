@@ -1,0 +1,49 @@
+#!/bin/sh
+set -ex
+if [ $# -eq 0 ]; then
+  for instance in master volume filer; do
+    sh "$0" $instance
+  done
+  exit
+fi
+instance=${1?Please input: master|volume|filer}
+case $instance in
+filer)
+  instance_port=8888
+  ;;
+master)
+  instance_port=9333
+  ;;
+volume)
+  instance_port=8080
+  ;;
+*)
+  exit
+  ;;
+esac
+systemctl start "seaweedfs-$instance"
+case $instance in
+filer)
+  until wget -qO- "localhost:$instance_port" >/dev/null 2>&1; do
+    sleep 1
+  done
+  ;;
+master)
+  until wget -qO- "localhost:$instance_port/cluster/status" >/dev/null 2>&1; do
+    sleep 1
+  done
+  ;;
+volume)
+  until wget -qO- "localhost:$instance_port/status" >/dev/null 2>&1; do
+    sleep 1
+  done
+  ;;
+*)
+  exit
+  ;;
+esac
+systemctl status --no-pager "seaweedfs-$instance"
+wget -qO- "localhost:2$instance_port/metrics" | grep ^SeaweedFS_ | tail
+cat <<\EOF
+systemctl list-unit-files | grep seaweedfs | awk '{print $1}' | xargs systemctl stop && ls -ld $(findmnt -ntxfs | awk '{printf"%s/seaweedfs\n",$1}')
+EOF

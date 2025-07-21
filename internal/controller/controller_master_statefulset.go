@@ -13,7 +13,11 @@ import (
 )
 
 func buildMasterStartupScript(m *seaweedv1.Seaweed) string {
-	command := []string{"weed", "-logtostderr=true", "master"}
+	command := []string{"exec weed", "-logtostderr=true", "master", fmt.Sprintf("-port=%d", seaweedv1.MasterHTTPPort)}
+	if m.Spec.HostNetwork != nil && *m.Spec.HostNetwork == true {
+	} else {
+		command = append([]string{"until nslookup $(hostname -f) | grep $(hostname -i); do sleep 1; done&&"}, command...)
+	}
 	spec := m.Spec.Master
 	if spec.VolumePreallocate != nil && *spec.VolumePreallocate {
 		command = append(command, "-volumePreallocate")
@@ -41,7 +45,7 @@ func buildMasterStartupScript(m *seaweedv1.Seaweed) string {
 
 	command = append(command, fmt.Sprintf("-ip=$(POD_NAME).%s-master-peer.%s", m.Name, m.Namespace))
 	command = append(command, fmt.Sprintf("-peers=%s", getMasterPeersString(m)))
-	return strings.Join(command, " ")
+	return strings.Join(append(command, m.Spec.Master.Args...), " ")
 }
 
 func (r *SeaweedReconciler) createMasterStatefulSet(m *seaweedv1.Seaweed) *appsv1.StatefulSet {
@@ -79,8 +83,17 @@ func (r *SeaweedReconciler) createMasterStatefulSet(m *seaweedv1.Seaweed) *appsv
 				},
 			},
 		},
+		{
+			Name: "master-tmp",
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{
+					Medium: corev1.StorageMediumMemory,
+				},
+			},
+		},
 	}
 	masterPodSpec.EnableServiceLinks = &enableServiceLinks
+	masterPodSpec.DNSPolicy = m.BaseMasterSpec().DNSPolicy()
 	masterPodSpec.Containers = []corev1.Container{{
 		Name:            "master",
 		Image:           m.Spec.Image,
@@ -93,13 +106,30 @@ func (r *SeaweedReconciler) createMasterStatefulSet(m *seaweedv1.Seaweed) *appsv
 				ReadOnly:  true,
 				MountPath: "/etc/seaweedfs",
 			},
+			{
+				Name:      "master-tmp",
+				ReadOnly:  false,
+				MountPath: "/tmp",
+			},
 		},
+		Args: m.Spec.Master.Args,
 		Command: []string{
 			"/bin/sh",
 			"-ec",
 			buildMasterStartupScript(m),
 		},
 		Ports: ports,
+		StartupProbe: &corev1.Probe{
+			ProbeHandler: corev1.ProbeHandler{
+				HTTPGet: &corev1.HTTPGetAction{
+					Path:   "/cluster/status",
+					Port:   intstr.FromInt(seaweedv1.MasterHTTPPort),
+					Scheme: corev1.URISchemeHTTP,
+				},
+			},
+			FailureThreshold: 100,
+			TimeoutSeconds:   15,
+		},
 		ReadinessProbe: &corev1.Probe{
 			ProbeHandler: corev1.ProbeHandler{
 				HTTPGet: &corev1.HTTPGetAction{

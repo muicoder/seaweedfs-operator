@@ -1,0 +1,85 @@
+#!/bin/sh
+
+set -e
+
+if [ "$(id -u "$USER")" -ne 0 ]; then
+  echo "Please run as root user!"
+  exit
+fi
+
+readonly masterPort=9333
+readonly volumePort=8080
+readonly filerPort=8888
+readonly WEED=/usr/local/bin/weed
+mkdir -p ${WEED%/*}
+if ! $WEED version 2>/dev/null; then
+  wget -O- https://ghp.ci/github.com/seaweedfs/seaweedfs/releases/download/4.01/linux_amd64_full_large_disk.tar.gz | tar -xzv -C${WEED%/*}
+fi
+$WEED scaffold -config 2>&1 | grep Example: | awk -F= '{print $NF}' | sed 's~\[~~g;s~\]~~g;s~|~\n~g' | while read -r t; do $WEED scaffold -config "$t" >"${WEED%/*}/$t.toml"; done
+hostIP=$(hostname -I | awk '{print $1}')
+if [ $# -eq 0 ]; then
+  masterPeers=$hostIP:$masterPort
+else
+  masterPeers=$(
+    for ip; do
+      echo "$ip:$masterPort"
+    done | xargs | sed 's~ ~,~g'
+  )
+fi
+echo ewogICJpZGVudGl0aWVzIjogWwogICAgewogICAgICAibmFtZSI6ICJkZWZhdWx0IiwKICAgICAgImFjdGlvbnMiOiBbCiAgICAgICAgIlJlYWQiCiAgICAgIF0KICAgIH0sCiAgICB7CiAgICAgICJuYW1lIjogImFkbWluIiwKICAgICAgImNyZWRlbnRpYWxzIjogWwogICAgICAgIHsKICAgICAgICAgICJhY2Nlc3NLZXkiOiAiYzJWaGQyVmxaR1p6MTIzYWRtaW4iLAogICAgICAgICAgInNlY3JldEtleSI6ICJjMlZoZDJWbFpHWnpMVzl3WlhKaGRHOXkyMDI0YzJWaGQyVmxaR1p6IgogICAgICAgIH0KICAgICAgXSwKICAgICAgImFjdGlvbnMiOiBbCiAgICAgICAgIkFkbWluIiwKICAgICAgICAiUmVhZCIsCiAgICAgICAgIkxpc3QiLAogICAgICAgICJUYWdnaW5nIiwKICAgICAgICAiV3JpdGUiCiAgICAgIF0sCiAgICAgICJhY2NvdW50IjogewogICAgICAgICJpZCI6ICJhZG1pbiIKICAgICAgfQogICAgfSwKICAgIHsKICAgICAgIm5hbWUiOiAicmVhZCIsCiAgICAgICJjcmVkZW50aWFscyI6IFsKICAgICAgICB7CiAgICAgICAgICAiYWNjZXNzS2V5IjogImMyVmhkMlZsWkdaejEyMzRyZWFkIiwKICAgICAgICAgICJzZWNyZXRLZXkiOiAiYzJWaGQyVmxaR1p6TFc5d1pYSmhkRzl5cmVhZGMyVmhkMlZsWkdaeiIKICAgICAgICB9CiAgICAgIF0sCiAgICAgICJhY3Rpb25zIjogWwogICAgICAgICJSZWFkIgogICAgICBdCiAgICB9LAogICAgewogICAgICAibmFtZSI6ICJ1c2VyIiwKICAgICAgImNyZWRlbnRpYWxzIjogWwogICAgICAgIHsKICAgICAgICAgICJhY2Nlc3NLZXkiOiAiYzJWaGQyVmxaR1p6MTIzNHVzZXIiLAogICAgICAgICAgInNlY3JldEtleSI6ICJjMlZoZDJWbFpHWnpMVzl3WlhKaGRHOXl1c2VyYzJWaGQyVmxaR1p6IgogICAgICAgIH0KICAgICAgXSwKICAgICAgImFjdGlvbnMiOiBbCiAgICAgICAgIlJlYWQiLAogICAgICAgICJMaXN0IiwKICAgICAgICAiVGFnZ2luZyIsCiAgICAgICAgIldyaXRlIgogICAgICBdCiAgICB9LAogICAgewogICAgICAibmFtZSI6ICJidWNrZXQiLAogICAgICAiY3JlZGVudGlhbHMiOiBbCiAgICAgICAgewogICAgICAgICAgImFjY2Vzc0tleSI6ICJjMlZoZDJWbFpHWnoxMmJ1Y2tldCIsCiAgICAgICAgICAic2VjcmV0S2V5IjogImMyVmhkMlZsWkdaekxXOXdaWEpoZEc5eTIwMjRjMlZoZDJWbFpHWnoiCiAgICAgICAgfQogICAgICBdLAogICAgICAiYWN0aW9ucyI6IFsKICAgICAgICAiUmVhZDpidWNrZXQiLAogICAgICAgICJMaXN0OmJ1Y2tldCIsCiAgICAgICAgIlRhZ2dpbmc6YnVja2V0IiwKICAgICAgICAiV3JpdGU6YnVja2V0IgogICAgICBdCiAgICB9CiAgXSwKICAiYWNjb3VudHMiOiBbCiAgICB7CiAgICAgICJpZCI6ICJhZG1pbiIsCiAgICAgICJkaXNwbGF5TmFtZSI6ICJTZWF3ZWVkRlMiLAogICAgICAiZW1haWxBZGRyZXNzIjogImFkbWluQGVtYWlsLmNvbSIKICAgIH0KICBdCn0K | base64 -d >${WEED%/*}/filer.s3
+cat <<EOF >${WEED%/*}/filer.option
+defaultReplicaPlacement=000
+encryptVolumeData
+ip.bind=0.0.0.0
+master=$masterPeers
+metricsPort=2$filerPort
+port=$filerPort
+s3
+s3.config=filer.s3
+EOF
+cat <<EOF >${WEED%/*}/master.option
+defaultReplication=001
+ip.bind=0.0.0.0
+mdir=${WEED%/*}
+metricsPort=2$masterPort
+peers=$masterPeers
+port=$masterPort
+raftBootstrap
+raftHashicorp
+volumePreallocate
+EOF
+findmnt -ntxfs | awk '{printf"%s/seaweedfs\n",$1}' | xargs mkdir -p
+cat <<EOF >${WEED%/*}/volume.option
+dir=$(findmnt -ntxfs | awk '{printf"%s/seaweedfs\n",$1}' | xargs | sed 's~ ~,~g')
+index=leveldb
+ip.bind=0.0.0.0
+max=0
+minFreeSpace=31G
+metricsPort=2$volumePort
+mserver=$masterPeers
+port=$volumePort
+publicUrl=$(echo "$hostIP" | sed 's~\.~-~g').seaweedfs.com:$volumePort
+EOF
+for instance in master volume filer; do
+  cat <<EOF >"/etc/systemd/system/seaweedfs-$instance.service"
+[Unit]
+After=network.target
+Description=SeaweedFS Server($instance)
+Documentation=https://github.com/seaweedfs/seaweedfs/wiki
+[Service]
+ExecStart=${WEED%/*}/weed $instance -options=$instance.option
+LimitNOFILE=100032
+Restart=on-failure
+TimeoutStartSec=infinity
+Type=simple
+WorkingDirectory=${WEED%/*}
+[Install]
+WantedBy=multi-user.target
+EOF
+done && systemctl daemon-reload
+df -xshm -xtmpfs -xoverlay -Thi
+echo "
+$0.checker
+"
+ls -lh ${WEED%/*}/*.toml ${WEED%/*}/*.option
+echo "Please update the above file to a valid configuration!!!"
