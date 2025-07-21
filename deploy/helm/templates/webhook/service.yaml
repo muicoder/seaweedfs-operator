@@ -6,6 +6,7 @@ metadata:
   name: {{ include "seaweedfs-operator.fullname" . }}-webhook
   labels:
     app: {{ include "seaweedfs-operator.fullname" . }}
+  namespace: {{ .Release.Namespace }}
 spec:
   type: ClusterIP
   ports:

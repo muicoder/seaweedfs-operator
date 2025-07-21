@@ -1906,6 +1906,10 @@ spec:
                     description: Annotations of the component. Merged into the cluster-level
                       annotations if non-empty
                     type: object
+                  args:
+                    items:
+                      type: string
+                    type: array
                   claims:
                     description: |-
                       Claims lists the names of resources, defined in spec.resourceClaims,
@@ -3357,6 +3361,10 @@ spec:
                     description: Annotations of the component. Merged into the cluster-level
                       annotations if non-empty
                     type: object
+                  args:
+                    items:
+                      type: string
+                    type: array
                   claims:
                     description: |-
                       Claims lists the names of resources, defined in spec.resourceClaims,
@@ -4695,6 +4703,10 @@ spec:
                     description: Annotations of the component. Merged into the cluster-level
                       annotations if non-empty
                     type: object
+                  args:
+                    items:
+                      type: string
+                    type: array
                   claims:
                     description: |-
                       Claims lists the names of resources, defined in spec.resourceClaims,

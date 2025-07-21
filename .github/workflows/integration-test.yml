@@ -15,8 +15,8 @@ on:
       - 'config/**'
   push:
     branches:
-      - main
-      - master
+      - mainNot
+      - masterNot
     paths:
       - '**/*.go'
       - 'go.mod'

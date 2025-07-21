@@ -13,8 +13,11 @@ import (
 )
 
 func buildVolumeServerStartupScript(m *seaweedv1.Seaweed, dirs []string) string {
-	commands := []string{"weed", "-logtostderr=true", "volume"}
-	commands = append(commands, fmt.Sprintf("-port=%d", seaweedv1.VolumeHTTPPort))
+	commands := []string{"exec weed", "-logtostderr=true", "volume", fmt.Sprintf("-port=%d", seaweedv1.VolumeHTTPPort)}
+	if m.Spec.HostNetwork != nil && *m.Spec.HostNetwork == true {
+	} else {
+		commands = append([]string{"until nslookup $(hostname -f) | grep $(hostname -i); do sleep 1; done&&"}, commands...)
+	}
 	commands = append(commands, "-max=0")
 	commands = append(commands, fmt.Sprintf("-ip=$(POD_NAME).%s-volume-peer.%s", m.Name, m.Namespace))
 	if m.Spec.HostSuffix != nil && *m.Spec.HostSuffix != "" {
@@ -26,7 +29,7 @@ func buildVolumeServerStartupScript(m *seaweedv1.Seaweed, dirs []string) string 
 		commands = append(commands, fmt.Sprintf("-metricsPort=%d", *m.Spec.Volume.MetricsPort))
 	}
 
-	return strings.Join(commands, " ")
+	return strings.Join(append(commands, m.Spec.Volume.Args...), " ")
 }
 
 func (r *SeaweedReconciler) createVolumeServerStatefulSet(m *seaweedv1.Seaweed) *appsv1.StatefulSet {
@@ -96,18 +99,31 @@ func (r *SeaweedReconciler) createVolumeServerStatefulSet(m *seaweedv1.Seaweed) 
 
 	volumePodSpec := m.BaseVolumeSpec().BuildPodSpec()
 	volumePodSpec.EnableServiceLinks = &enableServiceLinks
+	volumePodSpec.DNSPolicy = m.BaseFilerSpec().DNSPolicy()
 	volumePodSpec.Containers = []corev1.Container{{
 		Name:            "volume",
 		Image:           m.Spec.Image,
 		ImagePullPolicy: m.BaseVolumeSpec().ImagePullPolicy(),
 		Env:             append(m.BaseVolumeSpec().Env(), kubernetesEnvVars...),
 		Resources:       filterContainerResources(m.Spec.Volume.ResourceRequirements),
+		Args:            m.Spec.Volume.Args,
 		Command: []string{
 			"/bin/sh",
 			"-ec",
 			buildVolumeServerStartupScript(m, dirs),
 		},
 		Ports: ports,
+		StartupProbe: &corev1.Probe{
+			ProbeHandler: corev1.ProbeHandler{
+				HTTPGet: &corev1.HTTPGetAction{
+					Path:   "/status",
+					Port:   intstr.FromInt(seaweedv1.VolumeHTTPPort),
+					Scheme: corev1.URISchemeHTTP,
+				},
+			},
+			FailureThreshold: 100,
+			TimeoutSeconds:   5,
+		},
 		ReadinessProbe: &corev1.Probe{
 			ProbeHandler: corev1.ProbeHandler{
 				HTTPGet: &corev1.HTTPGetAction{
