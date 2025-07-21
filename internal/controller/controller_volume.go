@@ -39,7 +39,7 @@ func (r *SeaweedReconciler) ensureVolumeServers(seaweedCR *seaweedv1.Seaweed) (d
 		return
 	}
 
-	if seaweedCR.Spec.Volume.MetricsPort != nil {
+	if false {
 		if done, result, err = r.ensureVolumeServerServiceMonitor(seaweedCR); done {
 			return
 		}
